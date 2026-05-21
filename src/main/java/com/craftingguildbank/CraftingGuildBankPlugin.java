@@ -114,7 +114,7 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		if (isCraftingGuildTeleport(option, itemId))
 		{
-			startGhostHighlight();
+			startPendingTeleportCheck();
 		}
 	}
 
@@ -147,6 +147,8 @@ public class CraftingGuildBankPlugin extends Plugin
 
 				return;
 			}
+
+			startGhostHighlight(player);
 		}
 
 		if (ghostBankChestLocalLocation != null)
@@ -173,10 +175,23 @@ public class CraftingGuildBankPlugin extends Plugin
 		}
 	}
 
-	private void startGhostHighlight()
+	private void startPendingTeleportCheck()
 	{
-		final Player player = client.getLocalPlayer();
+		if (ghostBankChestModel == null)
+		{
+			clientThread.invokeLater(this::loadGhostBankChestModel);
+		}
 
+		clearGhost();
+
+		teleportClickedTick = client.getTickCount();
+		pendingTeleportAnimationCheck = true;
+		pendingCraftingGuildTeleport = false;
+		realBankChest = null;
+	}
+
+	private void startGhostHighlight(Player player)
+	{
 		if (player == null)
 		{
 			return;
@@ -184,7 +199,12 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		if (ghostBankChestModel == null)
 		{
-			clientThread.invokeLater(this::loadGhostBankChestModel);
+			loadGhostBankChestModel();
+		}
+
+		if (ghostBankChestModel == null)
+		{
+			return;
 		}
 
 		final WorldView worldView = client.getTopLevelWorldView();
@@ -195,16 +215,16 @@ public class CraftingGuildBankPlugin extends Plugin
 			return;
 		}
 
+		// Animation 714 has started, so this local position should be the player's
+		// stopped teleport-animation position rather than the moving/running position.
 		ghostBankChestLocalLocation = predictedBankChestLocal(playerLocal, worldView);
 
-		// Keep the preview level with the player while the teleport animation is still playing.
+		// Keep the preview level with the player's teleport-animation position,
+		// not the predicted chest tile.
 		ghostProjectionZ = Perspective.getTileHeight(client, playerLocal, worldView.getPlane());
 
 		ghostStartedTick = client.getTickCount();
-		teleportClickedTick = client.getTickCount();
-
 		pendingCraftingGuildTeleport = true;
-		pendingTeleportAnimationCheck = true;
 		realBankChest = null;
 	}
 
