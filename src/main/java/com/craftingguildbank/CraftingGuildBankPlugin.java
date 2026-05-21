@@ -15,6 +15,7 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -34,11 +35,6 @@ public class CraftingGuildBankPlugin extends Plugin
 
 	private static final int BANK_CHEST_MODEL_ID = 21969;
 	private static final int BANK_CHEST_ORIENTATION = 512;
-
-	private static final int CRAFTING_CAPE = 9780;
-	private static final int CRAFTING_CAPE_T = 9781;
-	private static final int MAX_CAPE_INVENTORY = 13280;
-	private static final int MAX_CAPE_WORN = 13342;
 
 	private static final int CAPE_TELEPORT_ANIMATION = 714;
 	private static final int GHOST_TIMEOUT_TICKS = 5;
@@ -110,9 +106,9 @@ public class CraftingGuildBankPlugin extends Plugin
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		final String option = clean(event.getMenuOption());
-		final int itemId = event.getItemId();
+		final String widgetName = getWidgetName(event);
 
-		if (isCraftingGuildTeleport(option, itemId))
+		if (isCraftingGuildTeleport(option, widgetName))
 		{
 			startPendingTeleportCheck();
 		}
@@ -311,22 +307,32 @@ public class CraftingGuildBankPlugin extends Plugin
 		return null;
 	}
 
-	private boolean isCraftingGuildTeleport(String option, int itemId)
+	private boolean isCraftingGuildTeleport(String option, String widgetName)
 	{
-		return option.equals("teleport") && isCraftingCape(itemId)
-				|| option.equals("crafting guild") && isDefaultMaxCape(itemId);
+		if (option.equals("teleport") && isCraftingCapeWidget(widgetName))
+		{
+			return true;
+		}
+
+		return option.equals("crafting guild") && widgetName.equals("max cape");
 	}
 
-	private boolean isCraftingCape(int itemId)
+	private boolean isCraftingCapeWidget(String widgetName)
 	{
-		return itemId == CRAFTING_CAPE
-				|| itemId == CRAFTING_CAPE_T;
+		return widgetName.equals("crafting cape")
+				|| widgetName.equals("crafting cape(t)");
 	}
 
-	private boolean isDefaultMaxCape(int itemId)
+	private String getWidgetName(MenuOptionClicked event)
 	{
-		return itemId == MAX_CAPE_INVENTORY
-				|| itemId == MAX_CAPE_WORN;
+		final Widget widget = event.getWidget();
+
+		if (widget == null)
+		{
+			return "";
+		}
+
+		return clean(widget.getName());
 	}
 
 	private boolean isWithinCraftingGuildArrivalRadius(WorldPoint worldPoint)
