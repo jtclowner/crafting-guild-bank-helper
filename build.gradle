@@ -30,6 +30,7 @@ dependencies {
 group = 'com.example'
 
 tasks.withType(JavaCompile).configureEach {
+	options.compilerArgs += ["-Xlint:deprecation", "-Xlint:unchecked"]
 	options.encoding = 'UTF-8'
 	options.release.set(11)
 }
