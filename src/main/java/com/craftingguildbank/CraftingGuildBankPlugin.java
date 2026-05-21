@@ -35,15 +35,17 @@ public class CraftingGuildBankPlugin extends Plugin
 	private static final int BANK_CHEST_MODEL_ID = 21969;
 	private static final int BANK_CHEST_ORIENTATION = 512;
 
-	// Item IDs
 	private static final int CRAFTING_CAPE = 9780;
 	private static final int CRAFTING_CAPE_T = 9781;
 	private static final int MAX_CAPE_INVENTORY = 13280;
 	private static final int MAX_CAPE_WORN = 13342;
 
+	private static final int CAPE_TELEPORT_ANIMATION = 714;
+	private static final int GHOST_TIMEOUT_TICKS = 5;
+	private static final int CRAFTING_GUILD_ARRIVAL_RADIUS = 2;
+
 	private static final WorldPoint CRAFTING_GUILD_TELEPORT_TILE = new WorldPoint(2931, 3286, 0);
 	private static final WorldPoint BANK_CHEST_TILE = CRAFTING_GUILD_TELEPORT_TILE.dx(5).dy(-6);
-	private static final long GHOST_TIMEOUT_MILLIS = 5000L;
 
 	@Inject
 	private Client client;
@@ -69,8 +71,10 @@ public class CraftingGuildBankPlugin extends Plugin
 	@Getter
 	private Model ghostBankChestModel;
 
-	private long ghostStartedAtMillis;
+	private int ghostStartedTick;
+	private int teleportClickedTick;
 	private boolean pendingCraftingGuildTeleport;
+	private boolean pendingTeleportAnimationCheck;
 
 	@Override
 	protected void startUp()
@@ -127,6 +131,24 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		final WorldPoint playerLocation = player.getWorldLocation();
 
+		if (pendingTeleportAnimationCheck && client.getTickCount() > teleportClickedTick)
+		{
+			pendingTeleportAnimationCheck = false;
+
+			if (player.getAnimation() != CAPE_TELEPORT_ANIMATION)
+			{
+				clearGhost();
+				pendingCraftingGuildTeleport = false;
+
+				if (isWithinCraftingGuildArrivalRadius(playerLocation))
+				{
+					realBankChest = findRealBankChest();
+				}
+
+				return;
+			}
+		}
+
 		if (ghostBankChestLocalLocation != null)
 		{
 			handleGhostHighlight(playerLocation);
@@ -134,10 +156,10 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		if (pendingCraftingGuildTeleport && playerLocation.equals(CRAFTING_GUILD_TELEPORT_TILE))
 		{
-			applyRealBankChestHighlight();
+			showRealBankChestAndClearGhost();
 		}
 
-		if (realBankChest != null && !playerLocation.equals(CRAFTING_GUILD_TELEPORT_TILE))
+		if (realBankChest != null && !isWithinCraftingGuildArrivalRadius(playerLocation))
 		{
 			realBankChest = null;
 		}
@@ -178,8 +200,11 @@ public class CraftingGuildBankPlugin extends Plugin
 		// Keep the preview level with the player while the teleport animation is still playing.
 		ghostProjectionZ = Perspective.getTileHeight(client, playerLocal, worldView.getPlane());
 
-		ghostStartedAtMillis = System.currentTimeMillis();
+		ghostStartedTick = client.getTickCount();
+		teleportClickedTick = client.getTickCount();
+
 		pendingCraftingGuildTeleport = true;
+		pendingTeleportAnimationCheck = true;
 		realBankChest = null;
 	}
 
@@ -194,30 +219,27 @@ public class CraftingGuildBankPlugin extends Plugin
 
 	private void handleGhostHighlight(WorldPoint playerLocation)
 	{
-		if (playerLocation.equals(CRAFTING_GUILD_TELEPORT_TILE))
+		if (isWithinCraftingGuildArrivalRadius(playerLocation))
 		{
+			showRealBankChestAndClearGhost();
 			return;
 		}
 
-		if (System.currentTimeMillis() - ghostStartedAtMillis >= GHOST_TIMEOUT_MILLIS)
+		if (client.getTickCount() - ghostStartedTick >= GHOST_TIMEOUT_TICKS)
 		{
 			clearGhost();
 			pendingCraftingGuildTeleport = false;
+			pendingTeleportAnimationCheck = false;
 		}
 	}
 
-	private void applyRealBankChestHighlight()
+	private void showRealBankChestAndClearGhost()
 	{
-		final GameObject bankChest = findRealBankChest();
-
-		if (bankChest == null)
-		{
-			return;
-		}
-
-		realBankChest = bankChest;
+		realBankChest = findRealBankChest();
 		clearGhost();
+
 		pendingCraftingGuildTeleport = false;
+		pendingTeleportAnimationCheck = false;
 	}
 
 	private GameObject findRealBankChest()
@@ -287,18 +309,26 @@ public class CraftingGuildBankPlugin extends Plugin
 				|| itemId == MAX_CAPE_WORN;
 	}
 
+	private boolean isWithinCraftingGuildArrivalRadius(WorldPoint worldPoint)
+	{
+		return worldPoint.getPlane() == CRAFTING_GUILD_TELEPORT_TILE.getPlane()
+				&& worldPoint.distanceTo2D(CRAFTING_GUILD_TELEPORT_TILE) <= CRAFTING_GUILD_ARRIVAL_RADIUS;
+	}
+
 	private void clearGhost()
 	{
 		ghostBankChestLocalLocation = null;
 		ghostProjectionZ = 0;
+		ghostStartedTick = 0;
 	}
 
 	private void resetAllState()
 	{
 		clearGhost();
 		realBankChest = null;
-		ghostStartedAtMillis = 0;
+		teleportClickedTick = 0;
 		pendingCraftingGuildTeleport = false;
+		pendingTeleportAnimationCheck = false;
 	}
 
 	private static String clean(String text)
