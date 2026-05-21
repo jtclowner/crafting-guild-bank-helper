@@ -1,7 +1,6 @@
 package com.craftingguildbank;
 
 import com.google.inject.Provides;
-import java.util.Set;
 import javax.inject.Inject;
 import lombok.Getter;
 import net.runelite.api.Client;
@@ -25,9 +24,9 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Text;
 
 @PluginDescriptor(
-	name = "Crafting Guild Bank Helper",
-	description = "Shows where to click the Crafting Guild bank chest after cape teleporting",
-	tags = {"crafting", "guild", "bank", "cape", "teleport", "highlight"}
+		name = "Crafting Guild Bank Helper",
+		description = "Shows where to click the Crafting Guild bank chest after cape teleporting",
+		tags = {"crafting", "guild", "bank", "cape", "teleport", "highlight"}
 )
 public class CraftingGuildBankPlugin extends Plugin
 {
@@ -41,12 +40,10 @@ public class CraftingGuildBankPlugin extends Plugin
 	private static final int CRAFTING_CAPE_T = 9781;
 	private static final int MAX_CAPE_INVENTORY = 13280;
 	private static final int MAX_CAPE_WORN = 13342;
-	
+
 	private static final WorldPoint CRAFTING_GUILD_TELEPORT_TILE = new WorldPoint(2931, 3286, 0);
 	private static final WorldPoint BANK_CHEST_TILE = CRAFTING_GUILD_TELEPORT_TILE.dx(5).dy(-6);
 	private static final long GHOST_TIMEOUT_MILLIS = 5000L;
-
-	private static final Set<String> BANK_CHEST_OPTIONS = Set.of("use", "collect", "bank", "open");
 
 	@Inject
 	private Client client;
@@ -109,18 +106,11 @@ public class CraftingGuildBankPlugin extends Plugin
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		final String option = clean(event.getMenuOption());
-		final String target = clean(event.getMenuTarget());
 		final int itemId = event.getItemId();
 
 		if (isCraftingGuildTeleport(option, itemId))
 		{
 			startGhostHighlight();
-			return;
-		}
-
-		if (realBankChest != null && isBankChestClick(option, target, event.getId()))
-		{
-			realBankChest = null;
 		}
 	}
 
@@ -196,9 +186,9 @@ public class CraftingGuildBankPlugin extends Plugin
 	private LocalPoint predictedBankChestLocal(LocalPoint playerLocal, WorldView worldView)
 	{
 		return new LocalPoint(
-			playerLocal.getX() + (Perspective.LOCAL_TILE_SIZE * 5),
-			playerLocal.getY() - (Perspective.LOCAL_TILE_SIZE * 6),
-			worldView
+				playerLocal.getX() + (Perspective.LOCAL_TILE_SIZE * 5),
+				playerLocal.getY() - (Perspective.LOCAL_TILE_SIZE * 6),
+				worldView
 		);
 	}
 
@@ -282,30 +272,19 @@ public class CraftingGuildBankPlugin extends Plugin
 	private boolean isCraftingGuildTeleport(String option, int itemId)
 	{
 		return option.equals("teleport") && isCraftingCape(itemId)
-			|| option.equals("crafting guild") && isDefaultMaxCape(itemId);
+				|| option.equals("crafting guild") && isDefaultMaxCape(itemId);
 	}
 
 	private boolean isCraftingCape(int itemId)
 	{
 		return itemId == CRAFTING_CAPE
-			|| itemId == CRAFTING_CAPE_T;
+				|| itemId == CRAFTING_CAPE_T;
 	}
 
 	private boolean isDefaultMaxCape(int itemId)
 	{
 		return itemId == MAX_CAPE_INVENTORY
-			|| itemId == MAX_CAPE_WORN;
-	}
-
-	private boolean isBankChestClick(String option, String target, int id)
-	{
-		if (!BANK_CHEST_OPTIONS.contains(option))
-		{
-			return false;
-		}
-
-		return id == BANK_CHEST_OBJECT_ID
-			|| target.contains("bank chest");
+				|| itemId == MAX_CAPE_WORN;
 	}
 
 	private void clearGhost()
@@ -325,7 +304,7 @@ public class CraftingGuildBankPlugin extends Plugin
 	private static String clean(String text)
 	{
 		return Text.removeTags(text == null ? "" : text)
-			.toLowerCase()
-			.trim();
+				.toLowerCase()
+				.trim();
 	}
 }
