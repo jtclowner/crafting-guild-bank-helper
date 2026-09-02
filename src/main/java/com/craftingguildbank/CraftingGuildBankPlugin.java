@@ -38,6 +38,8 @@ public class CraftingGuildBankPlugin extends Plugin
 
 	private static final int CAPE_TELEPORT_ANIMATION = 714;
 	private static final int GHOST_TIMEOUT_TICKS = 5;
+	private static final int MOUNTED_CAPE_INTERACTION_TIMEOUT_TICKS = 20;
+	private static final int MOUNTED_MAX_CAPE_PERKS_TIMEOUT_TICKS = 50;
 	private static final int CRAFTING_GUILD_ARRIVAL_RADIUS = 2;
 
 	private static final WorldPoint CRAFTING_GUILD_TELEPORT_TILE = new WorldPoint(2931, 3286, 0);
@@ -69,8 +71,11 @@ public class CraftingGuildBankPlugin extends Plugin
 
 	private int ghostStartedTick;
 	private int teleportClickedTick;
+	private int mountedMaxCapePerksClickedTick;
 	private boolean pendingCraftingGuildTeleport;
 	private boolean pendingTeleportAnimationCheck;
+	private boolean allowDelayedTeleportAnimation;
+	private boolean pendingMountedMaxCapePerks;
 
 	@Override
 	protected void startUp()
@@ -107,10 +112,18 @@ public class CraftingGuildBankPlugin extends Plugin
 	{
 		final String option = clean(event.getMenuOption());
 		final String widgetName = getWidgetName(event);
+		final String target = clean(event.getMenuTarget());
 
-		if (isCraftingGuildTeleport(option, widgetName))
+		if (isMountedMaxCapePerks(option, target))
 		{
-			startPendingTeleportCheck();
+			mountedMaxCapePerksClickedTick = client.getTickCount();
+			pendingMountedMaxCapePerks = true;
+		}
+
+		if (isCraftingGuildTeleport(option, widgetName, target, pendingMountedMaxCapePerks))
+		{
+			pendingMountedMaxCapePerks = false;
+			startPendingTeleportCheck(isMountedCraftingCape(target));
 		}
 	}
 
@@ -127,14 +140,32 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		final WorldPoint playerLocation = player.getWorldLocation();
 
+		if (pendingMountedMaxCapePerks
+				&& client.getTickCount() - mountedMaxCapePerksClickedTick >= MOUNTED_MAX_CAPE_PERKS_TIMEOUT_TICKS)
+		{
+			pendingMountedMaxCapePerks = false;
+		}
+
 		if (pendingTeleportAnimationCheck && client.getTickCount() > teleportClickedTick)
 		{
-			pendingTeleportAnimationCheck = false;
-
 			if (player.getAnimation() != CAPE_TELEPORT_ANIMATION)
 			{
+				if (allowDelayedTeleportAnimation
+						&& client.getTickCount() - teleportClickedTick < MOUNTED_CAPE_INTERACTION_TIMEOUT_TICKS)
+				{
+					if (isWithinCraftingGuildArrivalRadius(playerLocation))
+					{
+						showRealBankChestAndClearGhost();
+						return;
+					}
+
+					return;
+				}
+
 				clearGhost();
 				pendingCraftingGuildTeleport = false;
+				pendingTeleportAnimationCheck = false;
+				allowDelayedTeleportAnimation = false;
 
 				if (isWithinCraftingGuildArrivalRadius(playerLocation))
 				{
@@ -144,6 +175,8 @@ public class CraftingGuildBankPlugin extends Plugin
 				return;
 			}
 
+			pendingTeleportAnimationCheck = false;
+			allowDelayedTeleportAnimation = false;
 			startGhostHighlight(player);
 		}
 
@@ -171,7 +204,7 @@ public class CraftingGuildBankPlugin extends Plugin
 		}
 	}
 
-	private void startPendingTeleportCheck()
+	private void startPendingTeleportCheck(boolean allowDelayedAnimation)
 	{
 		if (ghostBankChestModel == null)
 		{
@@ -182,6 +215,7 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		teleportClickedTick = client.getTickCount();
 		pendingTeleportAnimationCheck = true;
+		allowDelayedTeleportAnimation = allowDelayedAnimation;
 		pendingCraftingGuildTeleport = false;
 		realBankChest = null;
 	}
@@ -256,6 +290,7 @@ public class CraftingGuildBankPlugin extends Plugin
 
 		pendingCraftingGuildTeleport = false;
 		pendingTeleportAnimationCheck = false;
+		allowDelayedTeleportAnimation = false;
 	}
 
 	private GameObject findRealBankChest()
@@ -307,20 +342,44 @@ public class CraftingGuildBankPlugin extends Plugin
 		return null;
 	}
 
-	private boolean isCraftingGuildTeleport(String option, String widgetName)
+	private static boolean isCraftingGuildTeleport(
+		String option,
+		String widgetName,
+		String target,
+		boolean fromMountedMaxCapePerks
+	)
 	{
-		if (option.equals("teleport") && isCraftingCapeWidget(widgetName))
+		if (option.equals("teleport")
+				&& (isCraftingCapeWidget(widgetName) || isMountedCraftingCape(target)))
 		{
 			return true;
 		}
 
-		return option.equals("crafting guild") && widgetName.equals("max cape");
+		return option.equals("crafting guild")
+				&& (isMaxCape(widgetName) || isMaxCape(target) || fromMountedMaxCapePerks);
 	}
 
-	private boolean isCraftingCapeWidget(String widgetName)
+	private static boolean isMountedMaxCapePerks(String option, String target)
+	{
+		return option.equals("perks") && target.equals("mounted max cape");
+	}
+
+	private static boolean isCraftingCapeWidget(String widgetName)
 	{
 		return widgetName.equals("crafting cape")
 				|| widgetName.equals("crafting cape(t)");
+	}
+
+	private static boolean isMountedCraftingCape(String target)
+	{
+		return target.equals("mounted crafting cape")
+				|| target.equals("mounted crafting cape(t)")
+				|| target.equals("mounted crafting cape (t)");
+	}
+
+	private static boolean isMaxCape(String name)
+	{
+		return name.equals("max cape") || name.equals("mounted max cape");
 	}
 
 	private String getWidgetName(MenuOptionClicked event)
@@ -353,8 +412,11 @@ public class CraftingGuildBankPlugin extends Plugin
 		clearGhost();
 		realBankChest = null;
 		teleportClickedTick = 0;
+		mountedMaxCapePerksClickedTick = 0;
 		pendingCraftingGuildTeleport = false;
 		pendingTeleportAnimationCheck = false;
+		allowDelayedTeleportAnimation = false;
+		pendingMountedMaxCapePerks = false;
 	}
 
 	private static String clean(String text)
