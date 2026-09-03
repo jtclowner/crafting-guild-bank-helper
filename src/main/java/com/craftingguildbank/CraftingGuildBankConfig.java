@@ -62,4 +62,15 @@ public interface CraftingGuildBankConfig extends Config
 	{
 		return 2;
 	}
+
+	@ConfigItem(
+		keyName = "creditsMode",
+		name = "Credits mode",
+		description = "Celebrate Crafting Guild teleports with a thank-you to Heidi",
+		position = 5
+	)
+	default boolean creditsMode()
+	{
+		return false;
+	}
 }

@@ -1,8 +1,10 @@
 package com.craftingguildbank;
 
 import com.google.inject.Provides;
+import java.util.concurrent.ThreadLocalRandom;
 import javax.inject.Inject;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.Model;
@@ -15,7 +17,9 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -29,6 +33,7 @@ import net.runelite.client.util.Text;
 		description = "Shows where to click the Crafting Guild bank chest after cape teleporting",
 		tags = {"crafting", "guild", "bank", "cape", "teleport", "highlight"}
 )
+@Slf4j
 public class CraftingGuildBankPlugin extends Plugin
 {
 	static final int BANK_CHEST_OBJECT_ID = 14886;
@@ -41,6 +46,27 @@ public class CraftingGuildBankPlugin extends Plugin
 	private static final int MOUNTED_CAPE_INTERACTION_TIMEOUT_TICKS = 20;
 	private static final int MOUNTED_MAX_CAPE_PERKS_TIMEOUT_TICKS = 50;
 	private static final int CRAFTING_GUILD_ARRIVAL_RADIUS = 2;
+	private static final int CREDITS_SPOT_ANIM_KEY = 0x48454944;
+	private static final int CREDITS_OVERHEAD_CYCLES = 180;
+
+	private static final String[] CREDITS_MESSAGES = {
+		"Wow, thanks Heidi!",
+		"What a cool plugin idea!",
+		"Heidi, you're a genius!",
+		"This one’s for you, Heidi!",
+		"Heidi made banking better!",
+		"Another great idea from Heidi!",
+		"The Crafting Guild thanks you, Heidi!",
+		"Banking in style - thanks Heidi!"
+	};
+
+	private static final String[] CREDITS_JINGLES = {
+		"jingles/agility.wav",
+		"jingles/crafting.wav",
+		"jingles/ranged.wav",
+		"jingles/slayer.wav",
+		"jingles/woodcutting.wav"
+	};
 
 	private static final WorldPoint CRAFTING_GUILD_TELEPORT_TILE = new WorldPoint(2931, 3286, 0);
 	private static final WorldPoint BANK_CHEST_TILE = CRAFTING_GUILD_TELEPORT_TILE.dx(5).dy(-6);
@@ -55,7 +81,13 @@ public class CraftingGuildBankPlugin extends Plugin
 	private OverlayManager overlayManager;
 
 	@Inject
+	private AudioPlayer audioPlayer;
+
+	@Inject
 	private CraftingGuildBankOverlay overlay;
+
+	@Inject
+	private CraftingGuildBankConfig config;
 
 	@Getter
 	private LocalPoint ghostBankChestLocalLocation;
@@ -185,7 +217,8 @@ public class CraftingGuildBankPlugin extends Plugin
 			handleGhostHighlight(playerLocation);
 		}
 
-		if (pendingCraftingGuildTeleport && playerLocation.equals(CRAFTING_GUILD_TELEPORT_TILE))
+		// Only celebrate once the teleport has completed and the player has arrived.
+		if (pendingCraftingGuildTeleport && isWithinCraftingGuildArrivalRadius(playerLocation))
 		{
 			showRealBankChestAndClearGhost();
 		}
@@ -287,10 +320,51 @@ public class CraftingGuildBankPlugin extends Plugin
 	{
 		realBankChest = findRealBankChest();
 		clearGhost();
+		playCreditsCelebration();
 
 		pendingCraftingGuildTeleport = false;
 		pendingTeleportAnimationCheck = false;
 		allowDelayedTeleportAnimation = false;
+	}
+
+	private void playCreditsCelebration()
+	{
+		if (!config.creditsMode())
+		{
+			return;
+		}
+
+		final Player player = client.getLocalPlayer();
+
+		if (player == null)
+		{
+			return;
+		}
+
+		final ThreadLocalRandom random = ThreadLocalRandom.current();
+		player.createSpotAnim(CREDITS_SPOT_ANIM_KEY, SpotanimID.LEVELUP_MAX, 0, 0);
+		player.setOverheadText(CREDITS_MESSAGES[random.nextInt(CREDITS_MESSAGES.length)]);
+		player.setOverheadCycle(CREDITS_OVERHEAD_CYCLES);
+
+		final int soundEffectVolume = client.getPreferences().getSoundEffectVolume();
+
+		if (soundEffectVolume > 0)
+		{
+			final float gain = 20f * (float) Math.log10(soundEffectVolume / 127f);
+
+			try
+			{
+				audioPlayer.play(
+					CraftingGuildBankPlugin.class,
+					CREDITS_JINGLES[random.nextInt(CREDITS_JINGLES.length)],
+					gain
+				);
+			}
+			catch (Exception ex)
+			{
+				log.warn("Unable to play Credits mode jingle", ex);
+			}
+		}
 	}
 
 	private GameObject findRealBankChest()
